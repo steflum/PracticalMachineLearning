@@ -1,0 +1,139 @@
+---
+title: "Using Random Forest to Predict Correct Barbell Lifts from Wearable Accelerometer Data"
+author: "Stephanie Lum"
+date: "April 7, 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+This is the final course project for the Practical Machine Learning class taught by Johns Hopkins University as part of the Data Science specialization offered by Coursera.
+
+##Introduction
+
+This report investigates the relationship between data collected by wearble devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit*, and the ability to correctly perform barbell lifts. Six participants were asked to perform barbell lifts correctly and incorrectly in five different ways while wearing accelerometers on their belts, forearms, and arms. Various machine learning methods will be applied to the data collected from those accelerometers to build models to predict how the barbell lifts were performed (coded as A to E in the dataset, with A as the lift being performed correctly).
+
+##Data
+
+The training data can be downloaded from [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv).  
+The testing data can be downloaded from [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv).  
+The source for both datasets, as well as the original research paper, can be found here: http://groupware.les.inf.puc-rio.br/har
+
+###Loading the Data
+
+The following packages were used in this investigation:
+
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+```
+
+Both the training set and the testing set are downloaded and loaded.
+
+```{r}
+# Check to see if training and testing files exist. If not, downloads them
+if (!file.exists("training.csv")) {
+      fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+      download.file(fileURL, destfile = "training.csv")
+}
+
+if (!file.exists("testing.csv")) {
+      fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+      download.file(fileURL, destfile = "testing.csv")
+}
+
+# Load training and testing data
+training <- read.csv("training.csv", na.strings = c("NA", "#DIV/0!", ""))
+test_cases <- read.csv("testing.csv", na.strings = c("NA", "#DIV/o!", ""))
+```
+
+###Preprocessing
+
+After the data is loaded in, it is necessary to remove all the variables that only contain more than 75% **NA** or **NA** and **0** value observations. The first seven variables of the dataset are also removed, as they will not contribute to the prediction model.
+
+```{r}
+# Remove columns that are more than 75% NAs or NAs and 0s
+training <- training[,colSums(training != 0, na.rm = TRUE) > nrow(training) * .75]
+
+# Remove the first seven variables from the dataset
+training <- training[,8:length(colnames(training))]
+```
+
+Next, the data is tested to see if there are any near zero covariates, as they are not helpful in predicting. If there are any near zero covariates, that variable will be removed in order to simplify the model and to reduce noise.
+
+```{r}
+# Find the near zero covariates
+nzo <- nearZeroVar(training, saveMetrics = FALSE)
+sum(nzo)
+```
+
+It seems there are no near zero covariates, and thus there are no variables that need to be removed.     
+
+##Training
+
+First, the training data is partitioned into an additional training set to build the model and a testing set to use for cross validation after training the model.
+
+```{r}
+set.seed(8675309)
+
+inTrain <- createDataPartition(training$classe, p = 0.75, list = FALSE)
+train <- training[inTrain, ]
+test <- training[-inTrain, ]
+```
+
+The recursive partitioning and regression trees method and the random forest method will be applied to these partitioned datasets. Their accuracy and error rate will then be assessed in the cross-validation test set to determine which model has the better fit.
+
+###Recursive Partitioning and Regression Trees
+
+The first method is a classification tree.
+
+```{r, cache=TRUE}
+set.seed(8675309)
+
+model_rpart <- train(classe ~ ., data = train, method = "rpart")
+fancyRpartPlot(model_rpart$finalModel)
+```
+
+This model is then applied to the cross-validation test set, and a confusion matrix is generated.
+
+```{r}
+predict_rpart <- predict(model_rpart, test)
+confusionMatrix(predict_rpart, test$classe)
+```
+
+From the confusion matrix, the overall accuracy of the classification tree model is **48.8%**.
+
+###Random Forest
+
+Next, the random forest method is used, and a model is generated and applied to the cross-validation test set.
+
+```{r, cache = TRUE}
+set.seed(8675309)
+
+model_rf <- randomForest(classe ~ ., data = train, trControl = trainControl(method = "cv"))
+print(model_rf)
+```
+
+```{r}
+predict_rf <- predict(model_rf, test)
+confusionMatrix(predict_rf, test$classe)
+```
+
+From the confusion matrix, the overall accuracy of the random forest model is **99.5%**
+
+###Method Selection
+
+With an accuracy of **99.5%** and an error rate of **0.5%**, the random forest method will be used to predict the `classe` values on the testing data.
+
+##Application
+
+The random forest method will be applied to the testing dataset to predict the `classe` values.
+
+```{r}
+predict_test <- predict(model_rf, test_cases)
+result <- data.frame("TestCase" = c(1:20), "Classe" = predict_test)
+print(result, row.names = FALSE)
+
+```

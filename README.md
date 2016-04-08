@@ -22,4 +22,4 @@ The following components of the project are contained within this repository:
 
 - **CourseProject.md**: The markdown file of the report  
 
-- **CourseProject.html**: The HTML file of the report
+- **index.html**: The HTML file of the report
